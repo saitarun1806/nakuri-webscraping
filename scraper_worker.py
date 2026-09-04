@@ -30,7 +30,7 @@ STATES = [
 
 MAX_PAGES_PER_STATE = 40
 TEMP_DIR = "state_csvs"
-MAX_PARALLEL_WORKERS = 4
+MAX_PARALLEL_WORKERS = 20
 FINAL_OUTPUT = "naukri_jobs_all_india.csv"
 
 
