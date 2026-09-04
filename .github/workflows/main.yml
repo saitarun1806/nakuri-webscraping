@@ -1,0 +1,40 @@
+name: Naukri Job Scraper
+
+on:
+  workflow_dispatch:        # lets you trigger it manually from the Actions tab
+  schedule:
+    - cron: "0 3 * * *"     # optional: runs daily at 3 AM UTC — remove if you only want manual runs
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350    # GitHub's hard cap is 360 min (6 hrs) on free tier — stay under it
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Chrome + ChromeDriver
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Run scraper
+        run: python scraper_worker.py
+
+      - name: Upload results as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: naukri-jobs-csv
+          path: |
+            state_csvs/*.csv
+            naukri_jobs_all_india.csv
+          retention-days: 14
