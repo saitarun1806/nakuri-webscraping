@@ -16,6 +16,8 @@ from selenium.webdriver.support import expected_conditions as EC
 
 # ---------------- CONFIG ----------------
 
+# ---------------- CONFIG ----------------
+
 STATES = [
     "andhra-pradesh", "arunachal-pradesh", "assam", "bihar", "chhattisgarh",
     "goa", "gujarat", "haryana", "himachal-pradesh", "jharkhand",
@@ -28,9 +30,9 @@ STATES = [
     "daman-diu", "lakshadweep",
 ]
 
-MAX_PAGES_PER_STATE = 30
+MAX_PAGES_PER_STATE = 10        # capped as requested
 TEMP_DIR = "state_csvs"
-MAX_PARALLEL_WORKERS = 60
+MAX_PARALLEL_WORKERS = 4        # safe for GitHub's 2-core/7GB runners
 FINAL_OUTPUT = "naukri_jobs_all_india.csv"
 
 
