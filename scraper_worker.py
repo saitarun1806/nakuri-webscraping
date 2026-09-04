@@ -155,6 +155,7 @@ def scrape_job_detail(driver, job_url, state):
 
     return {
         "JobLink": job_url,
+        "ApplyLink": job_url,
         "Title": title,
         "Company": company,
         "CompanyRating": rating,
@@ -265,6 +266,7 @@ def merge_and_dedup(final_output=FINAL_OUTPUT):
         print("No jobs found across any state CSVs.", flush=True)
         return
 
+    # Keep the Naukri job URL as the clickable ApplyLink in the final CSV.
     final_fields = [f for f in fieldnames if f != "JobLink"]
     for row in all_rows:
         row.pop("JobLink", None)
