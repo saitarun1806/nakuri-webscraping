@@ -26,13 +26,12 @@ STATES = [
     "rajasthan", "sikkim", "tamil-nadu", "telangana", "tripura",
     "uttar-pradesh", "uttarakhand", "west-bengal",
     "delhi-ncr", "jammu-kashmir", "ladakh", "chandigarh",
-    "puducherry", "andaman-nicobar-islands", "dadra-nagar-haveli",
-    "daman-diu", "lakshadweep",
+    "puducherry",
 ]
 
 MAX_PAGES_PER_STATE = 10        # capped as requested
 TEMP_DIR = "state_csvs"
-MAX_PARALLEL_WORKERS = 4        # safe for GitHub's 2-core/7GB runners
+MAX_PARALLEL_WORKERS = 10        # safe for GitHub's 2-core/7GB runners
 FINAL_OUTPUT = "naukri_jobs_all_india.csv"
 
 
