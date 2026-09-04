@@ -28,9 +28,9 @@ STATES = [
     "daman-diu", "lakshadweep",
 ]
 
-MAX_PAGES_PER_STATE = 40
+MAX_PAGES_PER_STATE = 30
 TEMP_DIR = "state_csvs"
-MAX_PARALLEL_WORKERS = 20
+MAX_PARALLEL_WORKERS = 60
 FINAL_OUTPUT = "naukri_jobs_all_india.csv"
 
 
