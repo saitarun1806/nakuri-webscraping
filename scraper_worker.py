@@ -1,5 +1,5 @@
 """
-Naukri.com Job Scraper — All India (state-by-state, parallel)
+Naukri.com Job Scraper — All India (state-by-state, parallel) + Fresher/0-experience jobs
 Scrapes full job details including description, company info, ratings, etc.
 """
 
@@ -9,13 +9,12 @@ import json
 import time
 import re
 import os
+from urllib.parse import urlsplit
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-# ---------------- CONFIG ----------------
 
 # ---------------- CONFIG ----------------
 
@@ -30,7 +29,15 @@ STATES = [
     "puducherry",
 ]
 
-MAX_PAGES_PER_STATE = 10        # capped as requested
+# Each task is (name, location_slug, query_params_or_None)
+# `name` controls the log prefix and the output CSV filename in TEMP_DIR.
+# `location_slug` is the part after "jobs-in-" in the Naukri URL.
+# `query_params` is an optional raw query string appended to every page URL.
+TASKS = [(state, state, None) for state in STATES] + [
+    ("india-fresher-0exp", "india", "experience=0&jobAge=1"),
+]
+
+MAX_PAGES_PER_STATE = 10        # capped as requested (applies to every task, incl. fresher task)
 TEMP_DIR = "state_csvs"
 MAX_PARALLEL_WORKERS = 10        # safe for GitHub's 2-core/7GB runners
 FINAL_OUTPUT = "naukri_jobs_all_india.csv"
@@ -38,9 +45,9 @@ FINAL_OUTPUT = "naukri_jobs_all_india.csv"
 
 # ---------------- HELPERS ----------------
 
-def log(state, message):
+def log(name, message):
     """Prefixed, immediately-flushed print so logs appear live, not in batches."""
-    print(f"[{state}] {message}", flush=True)
+    print(f"[{name}] {message}", flush=True)
 
 
 def make_driver():
@@ -57,10 +64,20 @@ def make_driver():
     return webdriver.Chrome(options=options)
 
 
-def get_search_page_url(location, page):
+def get_search_page_url(location, page, query_params=None):
     if page == 1:
-        return f"https://www.naukri.com/jobs-in-{location}"
-    return f"https://www.naukri.com/jobs-in-{location}-{page}"
+        base = f"https://www.naukri.com/jobs-in-{location}"
+    else:
+        base = f"https://www.naukri.com/jobs-in-{location}-{page}"
+    if query_params:
+        return f"{base}?{query_params}"
+    return base
+
+
+def current_path(driver):
+    """URL path only, ignoring any query string — needed since some tasks
+    (e.g. the fresher/0-experience task) always carry a query string."""
+    return urlsplit(driver.current_url).path.rstrip("/")
 
 
 def safe_text(el, by, value, default="N/A"):
@@ -85,7 +102,7 @@ def extract_labeled_field(full_text, label):
 
 # ---------------- JOB DETAIL SCRAPER ----------------
 
-def scrape_job_detail(driver, job_url, state):
+def scrape_job_detail(driver, job_url, name):
     driver.get(job_url)
     wait = WebDriverWait(driver, 10)
     try:
@@ -152,7 +169,7 @@ def scrape_job_detail(driver, job_url, state):
     if address_match:
         address = address_match.group(1).split("\n")[0].strip()
 
-    log(state, f"    -> parsed: '{title[:60]}' @ {company} (rating: {rating})")
+    log(name, f"    -> parsed: '{title[:60]}' @ {company} (rating: {rating})")
 
     return {
         "JobLink": job_url,
@@ -179,13 +196,23 @@ def scrape_job_detail(driver, job_url, state):
     }
 
 
-# ---------------- STATE-LEVEL SCRAPER ----------------
+# ---------------- TASK-LEVEL SCRAPER ----------------
 
-def scrape_state(state):
+def scrape_task(task):
+    """
+    task: (name, location_slug, query_params_or_None)
+      - name: used for logging and as the output CSV filename (also stored
+        in the "State" column of each row, so e.g. the fresher task rows
+        are tagged State="india-fresher-0exp").
+      - location_slug: the part after "jobs-in-" in the URL (e.g. "karnataka" or "india").
+      - query_params: optional raw query string, e.g. "experience=0&jobAge=1".
+    """
+    name, location, query_params = task
+
     os.makedirs(TEMP_DIR, exist_ok=True)
-    output_file = os.path.join(TEMP_DIR, f"{state}.csv")
+    output_file = os.path.join(TEMP_DIR, f"{name}.csv")
 
-    log(state, "Launching browser...")
+    log(name, "Launching browser...")
     driver = make_driver()
     csv_file = None
     writer = None
@@ -193,31 +220,31 @@ def scrape_state(state):
 
     try:
         for page in range(1, MAX_PAGES_PER_STATE + 1):
-            url = get_search_page_url(state, page)
-            log(state, f"Loading page {page}: {url}")
+            url = get_search_page_url(location, page, query_params)
+            log(name, f"Loading page {page}: {url}")
             driver.get(url)
 
             wait = WebDriverWait(driver, 15)
             try:
                 wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.cust-job-tuple")))
             except Exception:
-                log(state, f"No job cards at page {page} — stopping this state.")
+                log(name, f"No job cards at page {page} — stopping this task.")
                 break
 
-            if page > 1 and driver.current_url.rstrip("/").endswith(f"jobs-in-{state}"):
-                log(state, f"Redirected to page 1 — pagination cap hit at page {page}.")
+            if page > 1 and current_path(driver) == f"/jobs-in-{location}":
+                log(name, f"Redirected to page 1 — pagination cap hit at page {page}.")
                 break
 
             cards = driver.find_elements(By.CSS_SELECTOR, "div.cust-job-tuple")
             links = [safe_attr(c, By.CLASS_NAME, "title", "href") for c in cards]
             links = [l for l in links if l != "N/A"]
-            log(state, f"  Found {len(links)} job links on page {page}")
+            log(name, f"  Found {len(links)} job links on page {page}")
 
             for i, link in enumerate(links, 1):
-                log(state, f"  [{i}/{len(links)}] Fetching: {link}")
+                log(name, f"  [{i}/{len(links)}] Fetching: {link}")
                 try:
-                    job_data = scrape_job_detail(driver, link, state)
-                    job_data["State"] = state
+                    job_data = scrape_job_detail(driver, link, name)
+                    job_data["State"] = name
 
                     if writer is None:
                         csv_file = open(output_file, "w", newline="", encoding="utf-8")
@@ -226,10 +253,10 @@ def scrape_state(state):
                     writer.writerow(job_data)
                     csv_file.flush()
                     total_saved += 1
-                    log(state, f"    Saved. Running total: {total_saved}")
+                    log(name, f"    Saved. Running total: {total_saved}")
 
                 except Exception as e:
-                    log(state, f"    FAILED on {link}: {e}")
+                    log(name, f"    FAILED on {link}: {e}")
                 time.sleep(1)
 
             time.sleep(1.5)
@@ -237,7 +264,7 @@ def scrape_state(state):
         if csv_file:
             csv_file.close()
         driver.quit()
-        log(state, f"DONE. Total jobs saved: {total_saved}")
+        log(name, f"DONE. Total jobs saved: {total_saved}")
 
 
 # ---------------- MERGE + DEDUP ----------------
@@ -251,7 +278,7 @@ def merge_and_dedup(
     fieldnames = None
 
     if not os.path.isdir(TEMP_DIR):
-        print("No state CSVs found — nothing to merge.", flush=True)
+        print("No task CSVs found — nothing to merge.", flush=True)
         return
 
     for fname in os.listdir(TEMP_DIR):
@@ -276,7 +303,7 @@ def merge_and_dedup(
 
     if not all_rows:
         print(
-            "No jobs found across any state CSVs.",
+            "No jobs found across any task CSVs.",
             flush=True
         )
         return
@@ -350,9 +377,10 @@ def merge_and_dedup(
 # ---------------- MAIN ----------------
 
 if __name__ == "__main__":
-    print(f"Starting scrape across {len(STATES)} states with {MAX_PARALLEL_WORKERS} parallel workers...\n", flush=True)
+    print(f"Starting scrape across {len(TASKS)} tasks "
+          f"({len(STATES)} states + fresher/0-exp) with {MAX_PARALLEL_WORKERS} parallel workers...\n", flush=True)
 
     with multiprocessing.Pool(processes=MAX_PARALLEL_WORKERS) as pool:
-        pool.map(scrape_state, STATES)
+        pool.map(scrape_task, TASKS)
 
     merge_and_dedup()
