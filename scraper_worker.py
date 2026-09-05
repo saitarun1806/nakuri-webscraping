@@ -5,6 +5,7 @@ Scrapes full job details including description, company info, ratings, etc.
 
 import multiprocessing
 import csv
+import json
 import time
 import re
 import os
@@ -241,7 +242,10 @@ def scrape_state(state):
 
 # ---------------- MERGE + DEDUP ----------------
 
-def merge_and_dedup(final_output=FINAL_OUTPUT):
+def merge_and_dedup(
+    final_output=FINAL_OUTPUT,
+    json_output="naukri_jobs_all_india.json"
+):
     seen_links = set()
     all_rows = []
     fieldnames = None
@@ -252,31 +256,95 @@ def merge_and_dedup(final_output=FINAL_OUTPUT):
 
     for fname in os.listdir(TEMP_DIR):
         if fname.endswith(".csv"):
-            with open(os.path.join(TEMP_DIR, fname), "r", encoding="utf-8") as f:
+            with open(
+                os.path.join(TEMP_DIR, fname),
+                "r",
+                encoding="utf-8"
+            ) as f:
+
                 reader = csv.DictReader(f)
+
                 if fieldnames is None:
                     fieldnames = reader.fieldnames
+
                 for row in reader:
                     link = row.get("JobLink", "")
+
                     if link and link not in seen_links:
                         seen_links.add(link)
                         all_rows.append(row)
 
     if not all_rows:
-        print("No jobs found across any state CSVs.", flush=True)
+        print(
+            "No jobs found across any state CSVs.",
+            flush=True
+        )
         return
 
-    # Keep the Naukri job URL as the clickable ApplyLink in the final CSV.
-    final_fields = [f for f in fieldnames if f != "JobLink"]
+    # --------------------------------------------------
+    # CREATE FINAL CSV
+    # --------------------------------------------------
+
+    # Keep ApplyLink in final CSV but remove duplicate JobLink
+    final_fields = [
+        f for f in fieldnames
+        if f != "JobLink"
+    ]
+
+    csv_rows = []
+
     for row in all_rows:
-        row.pop("JobLink", None)
+        csv_row = row.copy()
+        csv_row.pop("JobLink", None)
+        csv_rows.append(csv_row)
 
-    with open(final_output, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=final_fields)
+    with open(
+        final_output,
+        "w",
+        newline="",
+        encoding="utf-8"
+    ) as f:
+
+        writer = csv.DictWriter(
+            f,
+            fieldnames=final_fields
+        )
+
         writer.writeheader()
-        writer.writerows(all_rows)
+        writer.writerows(csv_rows)
 
-    print(f"\nMerged and deduplicated: {len(all_rows)} unique jobs saved to {final_output}", flush=True)
+    # --------------------------------------------------
+    # CREATE JSON
+    # --------------------------------------------------
+
+    with open(
+        json_output,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            csv_rows,
+            f,
+            ensure_ascii=False,
+            indent=2
+        )
+
+    print(
+        f"\nMerged and deduplicated: "
+        f"{len(all_rows)} unique jobs",
+        flush=True
+    )
+
+    print(
+        f"CSV saved to: {final_output}",
+        flush=True
+    )
+
+    print(
+        f"JSON saved to: {json_output}",
+        flush=True
+    )
 
 
 # ---------------- MAIN ----------------
