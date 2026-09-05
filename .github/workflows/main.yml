@@ -6,7 +6,12 @@ on:
     - cron: "0 3 * * *"
 
 permissions:
-  contents: write    # required so the workflow can push commits back to the repo
+  contents: write
+
+# Prevent two scraper runs from pushing to main simultaneously
+concurrency:
+  group: naukri-job-scraper
+  cancel-in-progress: false
 
 jobs:
   scrape:
@@ -16,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -51,6 +58,18 @@ jobs:
           git add naukri_jobs_all_india.csv
           git add naukri_jobs_all_india.json
 
-          git diff --staged --quiet && echo "No changes to commit" || git commit -m "Update Naukri jobs data - $(date -u +'%Y-%m-%d %H:%M UTC')"
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
 
-          git push
+          git commit -m "Update Naukri jobs data - $(date -u +'%Y-%m-%d %H:%M UTC')"
+
+          # Get the latest version of main
+          git fetch origin main
+
+          # Place our scraper results on top of the latest main
+          git rebase origin/main
+
+          # Push the rebased commit
+          git push origin HEAD:main
