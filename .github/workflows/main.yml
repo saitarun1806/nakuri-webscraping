@@ -36,16 +36,21 @@ jobs:
       - name: Upload results as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: naukri-jobs-csv
+          name: naukri-jobs-data
           path: |
             state_csvs/*.csv
             naukri_jobs_all_india.csv
+            naukri_jobs_all_india.json
           retention-days: 14
 
       - name: Commit and push results to repo
         run: |
           git config --local user.email "actions@github.com"
           git config --local user.name "github-actions[bot]"
+
           git add naukri_jobs_all_india.csv
+          git add naukri_jobs_all_india.json
+
           git diff --staged --quiet && echo "No changes to commit" || git commit -m "Update Naukri jobs data - $(date -u +'%Y-%m-%d %H:%M UTC')"
+
           git push
